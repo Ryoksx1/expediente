@@ -269,6 +269,44 @@ table.dados.dias tr.sub td { color: var(--ink-2); font-size: 13.5px; }
 table.dados.dias tr.sub td:first-child { padding-left: 22px; }
 table.dados.dias tfoot td { padding-top: 10px; font-weight: 800; font-size: 15px; border-bottom: 0; }
 table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6px; }
+/* imagens das tarefas: miniaturas quadradas; a capa ganha borda e selo */
+.img-secao { display: flex; flex-direction: column; gap: 8px; border-radius: 12px; transition: box-shadow .15s; }
+.img-secao.alvo { box-shadow: 0 0 0 2px var(--accent); }
+.img-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.img-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.img-mini { position: relative; aspect-ratio: 1; max-width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2); cursor: zoom-in; }
+.img-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.img-mini.capa { border: 2px solid var(--accent); }
+.img-mini:focus-visible, .img-cartao:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.selo-capa { position: absolute; left: 4px; bottom: 4px; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 800; padding: 2px 6px; border-radius: 999px; }
+.prog-dia { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.prog-dia:first-child { border-top: 0; padding-top: 0; }
+.prog-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+.prog-nota { font-size: 13px; color: var(--ink-2); }
+.lista-envio { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.linha-envio { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.linha-envio .nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linha-envio .st { grid-column: 1 / -1; font-weight: 600; font-size: 12.5px; color: var(--ink-2); }
+.linha-envio .st:empty { display: none; }
+.visor { position: relative; display: grid; place-items: center; background: var(--surface-2); border-radius: 12px; min-height: 200px; overflow: hidden; }
+.visor img { display: block; max-width: 100%; max-height: 64vh; object-fit: contain; }
+.visor img.borrada { filter: blur(6px); min-width: 50%; }
+.visor-seta { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: var(--sombra); }
+.visor-seta svg { width: 20px; height: 20px; }
+.visor-seta.esq { left: 8px; } .visor-seta.dir { right: 8px; }
+.visor-seta:disabled { opacity: .35; cursor: default; }
+.visor-info { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; min-width: 0; }
+.visor-info small { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+@media (max-width: 620px) { .galeria { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.img-cartao { display: flex; flex-direction: column; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); color: var(--ink); text-align: left; cursor: pointer; min-width: 0; }
+.img-cartao img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--surface-2); }
+.img-cartao .legenda { display: flex; flex-direction: column; padding: 8px 10px; min-width: 0; }
+.img-cartao .legenda strong { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.img-cartao .legenda small { font-size: 12px; color: var(--muted); }
+.cartao-tarefa .capa-t { width: calc(100% + 24px); margin: -10px -12px 2px; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-radius: 11px 11px 0 0; background: var(--surface-2); }
+.capa-l { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; }
+.barra.alerta > i { background: var(--warn); }
 .tip { position: fixed; z-index: 80; pointer-events: none; background: var(--ink); color: var(--bg); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; white-space: pre-line; max-width: 240px; }
 
 /* ---------- listas, áreas ---------- */
@@ -695,8 +733,55 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     return '﻿' + r.map((x) => x.map(q).join(';')).join('\r\n');
   };
 
+  // ---------- imagens das tarefas ----------
+  // O banco gratuito guarda no máximo ~1 MB por documento: a versão da tela cabe num documento só,
+  // e o original (até 10 MB) vai em pedaços de 1 MB.
+  N.IMG = {
+    LADO_TELA: 1600, LADO_MINI: 320, MAX_TELA: 1000000, MAX_MINI: 60000, TAM_PARTE: 1000000,
+    MAX_ORIGINAL: 10 * 1024 * 1024, MAX_PARTES: 11, LIMITE_GRATIS: 1024 * 1024 * 1024, AVISO_USO: 0.8,
+    TIPOS: ['referencia', 'progresso'], EXIBIVEIS: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  };
+  /** Medidas reduzidas para caber em "lado" (nunca aumenta uma imagem menor). */
+  N.dimensoes = (largura, altura, lado) => {
+    const k = Math.min(1, lado / Math.max(1, largura, altura));
+    return { w: Math.max(1, Math.round(largura * k)), h: Math.max(1, Math.round(altura * k)) };
+  };
+  /** Decide o que guardar de uma imagem: a própria (se já é leve e cabe na tela) ou uma cópia reduzida + o original em pedaços. */
+  N.planoImagem = ({ largura, altura, bytes, mime, guardarOriginal }) => {
+    const I = N.IMG;
+    const telaIgual = Math.max(largura, altura) <= I.LADO_TELA && bytes <= I.MAX_TELA && I.EXIBIVEIS.includes(mime);
+    if (telaIgual) return { telaIgual: true, tela: { w: largura, h: altura }, partes: 0, avisos: [] };
+    const avisos = [];
+    let partes = 0;
+    if (guardarOriginal && bytes > I.MAX_ORIGINAL) avisos.push('O original tem mais de 10 MB: fica guardada só a versão da tela.');
+    else if (guardarOriginal) partes = Math.ceil(bytes / I.TAM_PARTE);
+    return { telaIgual: false, tela: N.dimensoes(largura, altura, I.LADO_TELA), partes, avisos };
+  };
+  N.partirBytes = (u8, tam) => { const r = []; for (let i = 0; i < u8.length; i += tam) r.push(u8.subarray(i, i + tam)); return r; };
+  N.juntarBytes = (lista) => { const r = new Uint8Array(lista.reduce((t, x) => t + x.length, 0)); let i = 0; for (const x of lista) { r.set(x, i); i += x.length; } return r; };
+  N.b64DeBytes = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  N.bytesDeB64 = (b64) => { const s = atob(b64); const r = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) r[i] = s.charCodeAt(i); return r; };
+  N.fmtBytes = (n) => {
+    const v = Number(n) || 0;
+    if (v < 1024 * 1024) return `${Math.max(1, Math.round(v / 1024)).toLocaleString('pt-BR')} KB`;
+    if (v < 1024 * 1024 * 1024) return `${(v / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+    return `${(v / 1024 / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} GB`;
+  };
+  /** Espaço que uma imagem ocupa no banco: miniatura + versão da tela + original (quando guardado à parte). */
+  N.bytesImagem = (m) => (m.telaBytes || 0) + (m.partes ? m.originalBytes || 0 : 0) + String(m.mini || '').length;
+  /** Imagens de uma tarefa: referências na ordem em que entraram; progresso agrupado por dia, do mais novo ao mais antigo. */
+  N.imagensDaTarefa = (lista, tarefaId) => {
+    const da = (lista || []).filter((m) => m.tarefaId === tarefaId).sort((a, b) => (a.criadoEm < b.criadoEm ? -1 : 1));
+    const dias = new Map();
+    for (const m of da.filter((x) => x.tipo === 'progresso').sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0))) {
+      if (!dias.has(m.data)) dias.set(m.data, []);
+      dias.get(m.data).push(m);
+    }
+    return { referencias: da.filter((x) => x.tipo === 'referencia'), progresso: [...dias.entries()].map(([data, itens]) => ({ data, itens })) };
+  };
+
   // ---------- backup ----------
-  N.COLECOES = ['config', 'areas', 'quadros', 'tarefas', 'entradas', 'cronometros', 'recebimentos'];
+  N.COLECOES =['config', 'areas', 'quadros', 'tarefas', 'entradas', 'cronometros', 'recebimentos'];
   N.FORMATO_BACKUP = 1;
   N.hash = (txt) => { let h = 5381; for (let i = 0; i < txt.length; i++) h = ((h * 33) ^ txt.charCodeAt(i)) >>> 0; return h.toString(36); };
   N.montarBackup = (dados, agoraIso) => ({ app: 'expediente', formato: N.FORMATO_BACKUP, exportadoEm: agoraIso, dados: Object.fromEntries(N.COLECOES.map((c) => [c, (dados[c] || []).slice().sort((a, b) => (a.id < b.id ? -1 : 1))])) });
@@ -731,7 +816,24 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
         else if (e.tarefaId && (!tarefas.has(e.tarefaId) || tarefas.get(e.tarefaId).quadroId !== e.quadroId)) erros.push(`${c}: "${e.id}" tem tarefa incoerente.`);
       }
     }
-    return { ok: !erros.length, erros: erros.slice(0, 8), totalErros: erros.length, dados, contagem, exportadoEm: obj.exportadoEm || null };
+    // imagens (só no arquivo exportado com "Incluir imagens"): sem a chave, as imagens atuais ficam como estão
+    let imagens = null;
+    if (obj.imagens != null) {
+      if (!Array.isArray(obj.imagens)) erros.push('"imagens" não é uma lista.');
+      else {
+        const tarefas = new Set((dados.tarefas || []).map((t) => t.id));
+        const ids = new Set();
+        obj.imagens.forEach((m, i) => {
+          if (!m || typeof m !== 'object' || typeof m.id !== 'string' || !N.ID.test(m.id) || ids.has(m.id)) return erros.push(`imagens[${i}] tem um identificador inválido.`);
+          ids.add(m.id);
+          if (!tarefas.has(m.tarefaId)) return erros.push(`imagens: "${m.id}" aponta para uma tarefa que não está no backup.`);
+          if (!N.IMG.TIPOS.includes(m.tipo) || !N.dataValida(m.data) || typeof m.tela !== 'string' || !m.tela || (m.original != null && typeof m.original !== 'string')) erros.push(`imagens: "${m.id}" está inválida.`);
+        });
+        imagens = obj.imagens;
+        contagem.imagens = imagens.length;
+      }
+    }
+    return { ok: !erros.length, erros: erros.slice(0, 8), totalErros: erros.length, dados, imagens, contagem, exportadoEm: obj.exportadoEm || null };
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = N;
@@ -797,7 +899,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
       ouvirConta(fn) { this._ouvintesConta.add(fn); return () => this._ouvintesConta.delete(fn); },
       _avisar() { this.versao++; for (const fn of this._ouvintes) { try { fn(); } catch (e) { console.error(e); } } },
       _avisarConta() { for (const fn of this._ouvintesConta) { try { fn(this.usuario); } catch (e) { console.error(e); } } },
-      _vazio() { return { config: null, areas: [], quadros: [], tarefas: [], recebimentos: [], backups: [], entradas: new Map(), pendentesDoc: new Set(), cronometros: new Map() }; },
+      _vazio() { return { config: null, areas: [], quadros: [], tarefas: [], recebimentos: [], backups: [], entradas: new Map(), pendentesDoc: new Set(), cronometros: new Map(), imagens: new Map() }; },
       _salvarFalhas() { try { if (ls) ls.setItem(CHAVE_FALHAS, JSON.stringify(this.falhas.slice(-50))); } catch (e) { /* sem espaço */ } },
       _registrarFalha(op, e) {
         this.falhas = this.falhas.filter((f) => !(f.col === op.col && f.id === op.id));
@@ -867,6 +969,9 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
         this.erroInicial = null;
         this.raiz = null;
         this._demanda = new Map();
+        this.imagensLigadas = false;
+        this.imagensProntas = false;
+        this._telas = new Map();
       },
       _col(c) { return this.raiz.collection(c); },
       _ligar(uid) {
@@ -1034,6 +1139,120 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
           await emGrupos((atual[c] || []).filter((x) => !novosIds.has(x.id)).map((x) => (b) => b.delete(this._col(c).doc(x.id))), MAX_LOTE);
         }
       },
+
+      // ---------- imagens das tarefas ----------
+      // imagens/{id}: dados + miniatura · imagemTela/{id}: versão da tela · imagemPartes/{id}_{i}: original em pedaços de 1 MB.
+      // O site real grava o tipo "bytes" do Firestore (ocupa ~1/3 menos que texto); o simulado, base64.
+      /** Começa a ouvir as imagens (só quando uma tela precisa delas: a lista tem as miniaturas de todas). */
+      ligarImagens() {
+        if (this.imagensLigadas || !this.raiz) return;
+        this.imagensLigadas = true;
+        this._cancelar.push(this._col('imagens').onSnapshot((snap) => {
+          this.estado.imagens = new Map(snap.docs.map((d) => [d.id, { ...structuredClone(d.data()), id: d.id }]));
+          this.imagensProntas = true;
+          this._avisar();
+        }, (e) => { this.imagensLigadas = false; if (this.aoErroTardio) this.aoErroTardio(e); }));
+      },
+      _bytes(u8) { const B = this.fb.firestore.Blob; return B && B.fromUint8Array ? B.fromUint8Array(u8) : N.b64DeBytes(u8); },
+      _deBytes(v) { return v && typeof v.toUint8Array === 'function' ? v.toUint8Array() : typeof v === 'string' ? N.bytesDeB64(v) : new Uint8Array(0); },
+      /** Grava esperando a confirmação do servidor (arquivo grande não fica na fila de "sem internet"). */
+      async _gravarConfirmado(ref, dados) {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) throw Object.assign(new Error('Sem internet: as imagens só são enviadas com conexão.'), { code: 'invalid-argument' });
+        this.sync.pendentes++;
+        this._avisar();
+        let t;
+        try {
+          await Promise.race([ref.set(dados), new Promise((_, falha) => { t = setTimeout(() => falha(Object.assign(new Error('A conexão caiu no meio do envio. Tente de novo.'), { code: 'invalid-argument' })), 120000); })]);
+        } finally { clearTimeout(t); this.sync.pendentes = Math.max(0, this.sync.pendentes - 1); this._avisar(); }
+      },
+      /** Envia uma imagem: versão da tela, pedaços do original e, por último, os dados (quem vê os dados já encontra o resto). */
+      async enviarImagem(meta, tela, original, aoAvancar) {
+        this._exigirLogin();
+        N.validar.id(meta.id);
+        if (tela.length > N.IMG.MAX_TELA) throw Object.assign(new Error('A versão da tela ficou grande demais.'), { code: 'invalid-argument' });
+        const partes = original ? N.partirBytes(original, N.IMG.TAM_PARTE) : [];
+        if (partes.length > N.IMG.MAX_PARTES) throw Object.assign(new Error('O original passa de 10 MB.'), { code: 'invalid-argument' });
+        const total = partes.length + 2;
+        const feitos = [];
+        try {
+          await this._gravarConfirmado(this._col('imagemTela').doc(meta.id), { conteudo: this._bytes(tela) });
+          feitos.push(['imagemTela', meta.id]);
+          if (aoAvancar) aoAvancar(1, total);
+          for (let i = 0; i < partes.length; i++) {
+            await this._gravarConfirmado(this._col('imagemPartes').doc(`${meta.id}_${i}`), { conteudo: this._bytes(partes[i]) });
+            feitos.push(['imagemPartes', `${meta.id}_${i}`]);
+            if (aoAvancar) aoAvancar(i + 2, total);
+          }
+          await this._gravarConfirmado(this._col('imagens').doc(meta.id), { ...limpar(meta), partes: partes.length, telaBytes: tela.length });
+          if (aoAvancar) aoAvancar(total, total);
+          this._telas.set(meta.id, tela);
+        } catch (e) {
+          for (const [c, id] of feitos) this._col(c).doc(id).delete().catch(() => {}); // não deixa pedaços soltos
+          throw e;
+        }
+      },
+      async lerTela(meta) {
+        if (this._telas.has(meta.id)) return this._telas.get(meta.id);
+        this._exigirLogin();
+        const s = await this._col('imagemTela').doc(meta.id).get();
+        if (!s.exists) throw Object.assign(new Error('O arquivo desta imagem não foi encontrado.'), { code: 'invalid-argument' });
+        const u8 = this._deBytes(s.data().conteudo);
+        if (this._telas.size > 40) this._telas.delete(this._telas.keys().next().value);
+        this._telas.set(meta.id, u8);
+        return u8;
+      },
+      /** O arquivo original (remontado dos pedaços). Quando não há pedaços, a versão da tela é o próprio original (ou o que sobrou dele). */
+      async lerOriginal(meta, aoAvancar) {
+        if (!meta.partes) return this.lerTela(meta);
+        this._exigirLogin();
+        const lista = [];
+        for (let i = 0; i < meta.partes; i++) {
+          const s = await this._col('imagemPartes').doc(`${meta.id}_${i}`).get();
+          if (!s.exists) throw Object.assign(new Error('Uma parte do original está faltando.'), { code: 'invalid-argument' });
+          lista.push(this._deBytes(s.data().conteudo));
+          if (aoAvancar) aoAvancar(i + 1, meta.partes);
+        }
+        return N.juntarBytes(lista);
+      },
+      async excluirImagem(meta) {
+        this._exigirLogin();
+        const ops = [(b) => b.delete(this._col('imagens').doc(meta.id)), (b) => b.delete(this._col('imagemTela').doc(meta.id))];
+        for (let i = 0; i < (meta.partes || 0); i++) ops.push((b) => b.delete(this._col('imagemPartes').doc(`${meta.id}_${i}`)));
+        this._telas.delete(meta.id);
+        await this._emLotes(ops);
+      },
+      /** Dados de todas as imagens, direto do servidor (não depende de a lista estar ligada). */
+      async listarImagens(tarefaId) {
+        this._exigirLogin();
+        const ref = tarefaId ? this._col('imagens').where('tarefaId', '==', tarefaId) : this._col('imagens');
+        return (await ref.get()).docs.map((d) => ({ ...structuredClone(d.data()), id: d.id }));
+      },
+      async excluirImagensDaTarefa(tarefaId) { for (const m of await this.listarImagens(tarefaId)) await this.excluirImagem(m); },
+      async apagarTodasImagens(aoAvancar) {
+        const lista = await this.listarImagens();
+        for (let i = 0; i < lista.length; i++) { await this.excluirImagem(lista[i]); if (aoAvancar) aoAvancar(i + 1, lista.length); }
+      },
+      /** Para o arquivo de backup: cada imagem com a versão da tela e o original em base64, uma de cada vez (a página não junta tudo na memória). */
+      async paraCadaImagemCompleta(fn) {
+        const lista = await this.listarImagens();
+        for (let i = 0; i < lista.length; i++) {
+          const m = lista[i];
+          const tela = await this.lerTela(m);
+          const original = m.partes ? await this.lerOriginal(m) : null;
+          await fn({ ...m, tela: N.b64DeBytes(tela), original: original ? N.b64DeBytes(original) : null }, i + 1, lista.length);
+        }
+        this._telas.clear();
+      },
+      /** Restaura as imagens de um arquivo: troca as atuais pelas do arquivo. */
+      async substituirImagens(lista, aoAvancar) {
+        const novos = new Set(lista.map((m) => m.id));
+        for (const m of await this.listarImagens()) if (!novos.has(m.id)) await this.excluirImagem(m);
+        for (let i = 0; i < lista.length; i++) {
+          const { tela, original, ...meta } = lista[i];
+          await this.enviarImagem(meta, N.bytesDeB64(tela), original ? N.bytesDeB64(original) : null);
+          if (aoAvancar) aoAvancar(i + 1, lista.length);
+        }
+      },
     };
     return D;
   }
@@ -1177,12 +1396,82 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
         if (await S.temHoras(campo, id)) throw erro('Este item tem horas registradas. Arquive em vez de excluir, para não perder o histórico.', 'tem-historico');
         if (col === 'areas' && D.estado.quadros.some((q) => q.areaId === id)) throw erro('Esta área ainda tem quadros. Exclua ou arquive os quadros antes.', 'tem-historico');
         if (col === 'quadros' && D.estado.tarefas.some((t) => t.quadroId === id)) throw erro('Este quadro ainda tem tarefas. Exclua ou arquive as tarefas antes.', 'tem-historico');
+        if (col === 'tarefas') await D.excluirImagensDaTarefa(id); // as imagens vão junto com a tarefa
         return D.excluirDoc(col, id);
       },
     };
     return S;
   }
   raiz.CriarServicos = criarServicos;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/* Preparo das imagens no navegador (antes de enviar): abre o arquivo, decide pelo Nucleo.planoImagem o que guardar,
+   reduz para a tela quando precisa (nunca aumenta) e gera a miniatura dos cartões. */
+(function (raiz) {
+  'use strict';
+  const N = raiz.Nucleo;
+  const erro = (msg) => Object.assign(new Error(msg), { code: 'invalid-argument' });
+
+  /** Abre a imagem já com a rotação da foto aplicada. Devolve {fonte, largura, altura, liberar}. */
+  async function abrir(arquivo) {
+    if (raiz.createImageBitmap) {
+      try { const b = await createImageBitmap(arquivo, { imageOrientation: 'from-image' }); return { fonte: b, largura: b.width, altura: b.height, liberar: () => b.close && b.close() }; } catch (e) { /* tenta pelo <img> */ }
+    }
+    const url = URL.createObjectURL(arquivo);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    try { await img.decode(); } catch (e) { URL.revokeObjectURL(url); throw e; }
+    return { fonte: img, largura: img.naturalWidth, altura: img.naturalHeight, liberar: () => URL.revokeObjectURL(url) };
+  }
+  function desenhar(fonte, w, h) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.fillStyle = '#ffffff'; // JPG não tem transparência: fundo branco no lugar
+    x.fillRect(0, 0, w, h);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(fonte, 0, 0, w, h);
+    return c;
+  }
+  const blobDe = (canvas, q) => new Promise((ok, falha) => canvas.toBlob((b) => (b ? ok(b) : falha(erro('O navegador não conseguiu preparar a imagem.'))), 'image/jpeg', q));
+  /** JPG que caiba no limite: baixa a qualidade e, se ainda não couber, as medidas. */
+  async function jpegAte(fonte, w, h, limite) {
+    for (let k = 1; k >= 0.5; k -= 0.15) {
+      const c = desenhar(fonte, Math.round(w * k), Math.round(h * k));
+      for (const q of [0.88, 0.8, 0.7, 0.6]) { const b = await blobDe(c, q); if (b.size <= limite) return { bytes: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height }; }
+    }
+    throw erro('Não foi possível reduzir esta imagem o bastante.');
+  }
+  function miniatura(fonte, largura, altura) {
+    const { w, h } = N.dimensoes(largura, altura, N.IMG.LADO_MINI);
+    const c = desenhar(fonte, w, h);
+    for (const q of [0.78, 0.65, 0.5, 0.35]) { const u = c.toDataURL('image/jpeg', q); if (u.length <= N.IMG.MAX_MINI) return u; }
+    throw erro('Não foi possível gerar a miniatura.');
+  }
+
+  /** Prepara um arquivo para enviar: {largura, altura, mime, nome, tela, telaMime, telaLargura, telaAltura, telaIgual, original, mini, avisos}. */
+  async function preparar(arquivo, { guardarOriginal }) {
+    const nome = String(arquivo.name || 'imagem').slice(0, 200);
+    if (arquivo.type && !/^image\//.test(arquivo.type)) throw erro(`“${nome}” não é uma imagem.`);
+    let a;
+    try { a = await abrir(arquivo); } catch (e) { throw erro(`“${nome}”: este formato não abre no navegador (por exemplo HEIC ou PSD). Exporte como JPG ou PNG.`); }
+    try {
+      const mime = arquivo.type || 'image/jpeg';
+      const plano = N.planoImagem({ largura: a.largura, altura: a.altura, bytes: arquivo.size, mime, guardarOriginal });
+      const bytes = new Uint8Array(await arquivo.arrayBuffer());
+      let tela;
+      if (plano.telaIgual) tela = { bytes, w: a.largura, h: a.altura, mime };
+      else { const j = await jpegAte(a.fonte, plano.tela.w, plano.tela.h, N.IMG.MAX_TELA); tela = { ...j, mime: 'image/jpeg' }; }
+      return {
+        largura: a.largura, altura: a.altura, mime, nome, telaIgual: plano.telaIgual,
+        tela: tela.bytes, telaMime: tela.mime, telaLargura: tela.w, telaAltura: tela.h,
+        original: plano.partes ? bytes : null, mini: miniatura(a.fonte, a.largura, a.altura), avisos: plano.avisos,
+      };
+    } finally { a.liberar(); }
+  }
+  const urlDe = (u8, mime) => URL.createObjectURL(new Blob([u8], { type: mime || 'image/jpeg' }));
+  raiz.Imagens = { preparar, urlDe };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>/* Interface do Expediente. Dados em window.Dados, operações em window.CriarServicos, cálculos em window.Nucleo. */
@@ -1207,13 +1496,13 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     pasta: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
     play: 'M8 5v14l11-7z', pausa: 'M9 5v14M15 5v14', parar: 'M6 6h12v12H6z', mais: 'M12 5v14M5 12h14', x: 'M6 6l12 12M18 6 6 18',
     check: 'M5 12.5l4.5 4.5L19 7.5', esq: 'M15 6l-6 6 6 6', dir: 'M9 6l6 6-6 6', pontos: 'M12 5h.01M12 12h.01M12 19h.01',
-    sobe: 'M6 15l6-6 6 6', desce: 'M6 9l6 6 6-6', alerta: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+    imagem: 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 2.5-2.5 5 5M15.5 9.5h.01', sobe: 'M6 15l6-6 6 6', desce: 'M6 9l6 6 6-6', alerta: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
   };
   const ic = (n) => `<svg viewBox="0 0 24 24" fill="${n === 'play' ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${n === 'pontos' ? 3.2 : 2}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[n]}"/></svg>`;
 
   const ABAS = [
     { id: 'cronometro', nome: 'Cronômetro', icone: 'relogio' }, { id: 'quadros', nome: 'Quadros', icone: 'quadro' }, { id: 'semana', nome: 'Semana', icone: 'grade' },
-    { id: 'relatorios', nome: 'Relatórios', icone: 'grafico' }, { id: 'areas', nome: 'Áreas', icone: 'pasta' },
+    { id: 'relatorios', nome: 'Relatórios', icone: 'grafico' }, { id: 'imagens', nome: 'Imagens', icone: 'imagem' }, { id: 'areas', nome: 'Áreas', icone: 'pasta' },
   ];
   const COLUNAS_PADRAO = ['A fazer', 'Fazendo', 'Revisão', 'Feito'];
   const cor = (i) => `var(--c${Number.isInteger(i) && i >= 0 && i <= 7 ? i : 0})`;
@@ -1224,7 +1513,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     aba: pref.ler('aba', 'cronometro'), status: 'carregando', areaSel: pref.ler('areaSel', ''), quadroPorArea: pref.ler('quadroPorArea', {}),
     vista: pref.ler('vista', 'kanban'), semana: N.hoje(), linhasExtras: [], carregados: new Set(), verArquivadas: false,
     rel: { periodo: 'semana', de: '', ate: '', areaId: '', quadroId: '', fat: '', arquivados: true, agrupar: 'dia', arred: pref.ler('arred', { modo: 'nenhum', passo: 15, direcao: 'cima' }) },
-    lista: { busca: '', coluna: '', prioridade: '', prazo: '' }, form: pref.ler('form', {}),
+    lista: { busca: '', coluna: '', prioridade: '', prazo: '' }, form: pref.ler('form', {}), img: { areaId: '', quadroId: '', tipo: '' },
   };
   if (!ABAS.some((a) => a.id === S.aba)) S.aba = 'cronometro';
 
@@ -1785,6 +2074,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     const tempo = c.tempoTarefa.get(t.id) || 0;
     const ativa = c.ativas.find((s) => s.tarefaId === t.id);
     return `<div class="cartao-tarefa" draggable="true" data-tarefa="${esc(t.id)}" data-acao="abrir-tarefa" data-id="${esc(t.id)}" role="button" tabindex="0">
+      ${t.capaMini ? `<img class="capa-t" src="${esc(t.capaMini)}" alt="" loading="lazy" draggable="false">` : ''}
       <div class="titulo">${esc(t.titulo)}</div>
       ${(t.etiquetas || []).length ? `<div class="chips" style="gap:4px">${t.etiquetas.map((x) => `<span class="etiqueta">${esc(x)}</span>`).join('')}</div>` : ''}
       <div class="rodape-t"><span title="Prioridade ${esc(NOME_PRIO[t.prioridade] || '')}"><span class="prio ${esc(t.prioridade)}"></span> ${esc(NOME_PRIO[t.prioridade] || '')}</span>${infoPrazo(t, c.hoje)}${ck.total ? `<span>☑ ${ck.feitos}/${ck.total}</span>` : ''}${tempo ? `<span class="num" title="Horas registradas nesta tarefa">${N.fmtDuracao(tempo)} h</span>` : ''}
@@ -1810,7 +2100,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
       <select class="entrada" id="ls-coluna">${opt('', 'Todas as colunas', !f.coluna)}${quadro.colunas.map((x) => opt(x.id, x.nome, f.coluna === x.id)).join('')}</select>
       <select class="entrada" id="ls-prio">${opt('', 'Qualquer prioridade', !f.prioridade)}${N.PRIORIDADES.map(([k, t]) => opt(k, t, f.prioridade === k)).join('')}</select>
       <select class="entrada" id="ls-prazo">${opt('', 'Qualquer prazo', !f.prazo)}${opt('vencidas', 'Vencidas', f.prazo === 'vencidas')}${opt('semana', 'Próximos 7 dias', f.prazo === 'semana')}</select></div>
-      <div class="lista-tarefas">${l.length ? l.map((t) => `<div class="linha-t" data-acao="abrir-tarefa" data-id="${esc(t.id)}" role="button" tabindex="0"><div style="min-width:0"><strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.titulo)}</strong><small class="mudo">${esc(nomeCol(t.colunaId))}</small></div><span class="so-pc"><span class="prio ${esc(t.prioridade)}"></span> ${esc(NOME_PRIO[t.prioridade])}</span><span class="so-pc">${infoPrazo(t, c.hoje) || '—'}</span><span class="num">${N.fmtDuracao(c.tempoTarefa.get(t.id) || 0)}</span><button type="button" class="icone-botao" data-acao="cronometrar-tarefa" data-id="${esc(t.id)}" aria-label="Cronometrar">${ic('play')}</button></div>`).join('') : '<div class="vazio"><strong>Nenhuma tarefa com esses filtros</strong></div>'}</div></section>`;
+      <div class="lista-tarefas">${l.length ? l.map((t) => `<div class="linha-t" data-acao="abrir-tarefa" data-id="${esc(t.id)}" role="button" tabindex="0"><div style="min-width:0;display:flex;gap:10px;align-items:center">${t.capaMini ? `<img class="capa-l" src="${esc(t.capaMini)}" alt="" loading="lazy">` : ''}<div style="min-width:0"><strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.titulo)}</strong><small class="mudo">${esc(nomeCol(t.colunaId))}</small></div></div><span class="so-pc"><span class="prio ${esc(t.prioridade)}"></span> ${esc(NOME_PRIO[t.prioridade])}</span><span class="so-pc">${infoPrazo(t, c.hoje) || '—'}</span><span class="num">${N.fmtDuracao(c.tempoTarefa.get(t.id) || 0)}</span><button type="button" class="icone-botao" data-acao="cronometrar-tarefa" data-id="${esc(t.id)}" aria-label="Cronometrar">${ic('play')}</button></div>`).join('') : '<div class="vazio"><strong>Nenhuma tarefa com esses filtros</strong></div>'}</div></section>`;
   }
   async function criarTarefa(quadroId, colunaId, titulo) {
     const c = C();
@@ -1859,6 +2149,8 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
         <label class="campo"><span>Etiquetas (separe por vírgula)</span><input id="tf-etq" maxlength="300" value="${esc((t.etiquetas || []).join(', '))}" placeholder="ex.: capa, urgente"></label>
         <label class="campo"><span>Descrição</span><textarea id="tf-desc" maxlength="5000">${esc(t.descricao || '')}</textarea></label>
         <div><div class="rotulo-mini" style="margin-bottom:4px">Checklist</div><div id="tf-check"></div><div class="nova-tarefa" style="margin-top:6px"><input id="tf-novo-item" maxlength="200" placeholder="+ Item do checklist"></div></div>
+        <div class="img-secao" data-tipo="referencia"><div class="img-cab"><span class="rotulo-mini">Referências</span><button type="button" class="botao peq" data-x="add-referencia">${ic('mais')}Imagem</button></div><div id="tf-img-referencia"></div></div>
+        <div class="img-secao" data-tipo="progresso"><div class="img-cab"><span class="rotulo-mini">Progresso</span><button type="button" class="botao peq" data-x="add-progresso">${ic('mais')}Progresso do dia</button></div><div id="tf-img-progresso"></div></div>
         <div><div class="rotulo-mini" style="margin-bottom:4px">Horas nesta tarefa</div><div id="tf-horas" class="mudo" style="font-size:14px">Carregando…</div></div>
         <div class="erro-campo"></div></form>`,
       rodape: rodapeForm(`<div class="linha-botoes"><button type="button" class="botao primario" data-x="play">${ic('play')}Cronometrar</button><button type="button" class="botao" data-x="arquivar">${t.arquivada ? 'Desarquivar' : 'Arquivar'}</button><button type="button" class="botao perigo" data-x="excluir">Excluir</button></div>`),
@@ -1869,7 +2161,35 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
           $('#tf-check', v).innerHTML = itens.length ? itens.map((x) => `<div class="check-item${x.feito ? ' feito' : ''}"><input type="checkbox" data-ck="${esc(x.k)}"${x.feito ? ' checked' : ''} aria-label="Concluir ${esc(x.texto)}"><span>${esc(x.texto)}</span><button type="button" class="icone-botao" data-ck-rem="${esc(x.k)}" aria-label="Remover item">${ic('x')}</button></div>`).join('') : '<p class="mudo" style="font-size:13.5px">Sem itens.</p>';
         };
         desenharCheck();
-        const parar = D.ouvir(() => { if (v.isConnected) setTimeout(desenharCheck, 0); else parar(); });
+        // imagens: referências e progresso por dia (com as horas trabalhadas na tarefa naquele dia)
+        let horasDia = new Map();
+        const desenharImagens = () => { if ($('#tf-img-referencia', v)) desenharImagensTarefa(v, id, horasDia); };
+        D.ligarImagens();
+        desenharImagens();
+        const parar = D.ouvir(() => { if (v.isConnected) setTimeout(() => { desenharCheck(); desenharImagens(); }, 0); else parar(); });
+        v.addEventListener('click', (ev) => {
+          const add = ev.target.closest('[data-x^="add-"]');
+          if (add) { escolherImagens((arqs) => modalEnviarImagens(id, arqs, add.dataset.x.slice(4))); return; }
+          const im = ev.target.closest('[data-img]');
+          if (im) { const g = N.imagensDaTarefa([...D.estado.imagens.values()], id); modalImagem(im.dataset.img, [...g.referencias, ...g.progresso.flatMap((x) => x.itens)].map((m) => m.id)); }
+        });
+        // arrastar arquivos para a janela, ou colar (Ctrl+V)
+        v.addEventListener('dragover', (ev) => { if (ev.dataTransfer && [...ev.dataTransfer.types].includes('Files')) { ev.preventDefault(); const s = ev.target.closest('.img-secao'); $$('.img-secao.alvo', v).forEach((x) => x !== s && x.classList.remove('alvo')); if (s) s.classList.add('alvo'); } });
+        v.addEventListener('dragleave', (ev) => { if (ev.target === v) $$('.img-secao.alvo', v).forEach((x) => x.classList.remove('alvo')); });
+        v.addEventListener('drop', (ev) => {
+          const arqs = [...((ev.dataTransfer && ev.dataTransfer.files) || [])].filter((f) => !f.type || f.type.startsWith('image/'));
+          if (!arqs.length) return;
+          ev.preventDefault();
+          $$('.img-secao.alvo', v).forEach((x) => x.classList.remove('alvo'));
+          const s = ev.target.closest('.img-secao');
+          modalEnviarImagens(id, arqs, s ? s.dataset.tipo : 'referencia');
+        });
+        v.addEventListener('paste', (ev) => {
+          const arqs = [...((ev.clipboardData && ev.clipboardData.files) || [])].filter((f) => f.type.startsWith('image/'));
+          if (!arqs.length) return;
+          ev.preventDefault();
+          modalEnviarImagens(id, arqs, 'referencia');
+        });
         v.addEventListener('change', async (ev) => { const ck = ev.target.dataset && ev.target.dataset.ck; if (ck) await exec(() => D.gravarCampos('tarefas', id, [[['checklist', ck, 'feito'], ev.target.checked]])); });
         v.addEventListener('click', async (ev) => { const r = ev.target.closest('[data-ck-rem]'); if (r) await exec(() => D.gravarCampos('tarefas', id, [[['checklist', r.dataset.ckRem], D.APAGAR]])); });
         $('#tf-novo-item', v).addEventListener('keydown', async (ev) => {
@@ -1885,12 +2205,16 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
         D._col('entradas').where('tarefaId', '==', id).get().then((s) => {
           const es = s.docs.map((d) => ({ ...d.data(), id: d.id })).sort((a, b) => (a.data < b.data ? 1 : -1));
           const tot = es.reduce((x, e) => x + (e.duracaoS || 0), 0);
+          horasDia = new Map();
+          for (const e of es) for (const p of N.distribuicao(e)) horasDia.set(p.data, (horasDia.get(p.data) || 0) + p.segundos);
+          desenharImagens();
           if ($('#tf-horas', v)) $('#tf-horas', v).innerHTML = es.length ? `<b class="num" style="color:var(--ink)">${N.fmtDuracao(tot)}</b> em ${es.length} registro${es.length > 1 ? 's' : ''}${t.estimativaS ? ` · estimativa ${N.fmtDuracao(t.estimativaS)}` : ''}<br>${es.slice(0, 5).map((e) => `${N.dataCurta(e.data)}: ${N.fmtDuracao(e.duracaoS)}${e.descricao ? ' · ' + esc(e.descricao) : ''}`).join('<br>')}` : 'Nenhuma hora registrada ainda.';
         }).catch(() => { if ($('#tf-horas', v)) $('#tf-horas', v).textContent = 'Não foi possível carregar agora.'; });
         v.querySelector('[data-x=play]').onclick = async () => { fecharModal(v); await cronometrarTarefa(id); };
         v.querySelector('[data-x=arquivar]').onclick = async () => { if (await exec(() => D.gravarCampos('tarefas', id, [[['arquivada'], !t.arquivada]]), t.arquivada ? 'Tarefa desarquivada' : 'Tarefa arquivada (as horas continuam nos relatórios)')) fecharModal(v); };
         v.querySelector('[data-x=excluir]').onclick = async () => {
-          if (!(await confirmar({ titulo: 'Excluir tarefa?', texto: `“${esc(t.titulo)}” será excluída de vez.`, botao: 'Excluir', perigo: true }))) return;
+          const nImg = [...D.estado.imagens.values()].filter((m) => m.tarefaId === id).length;
+          if (!(await confirmar({ titulo: 'Excluir tarefa?', texto: `“${esc(t.titulo)}” será excluída de vez${nImg ? `, junto com ${nImg} ${nImg > 1 ? 'imagens' : 'imagem'}` : ''}.`, botao: 'Excluir', perigo: true }))) return;
           try { await Sv.excluirOuArquivar('tarefas', id); fecharModal(v); toast('Tarefa excluída'); }
           catch (e) { toast(D.mensagemErro(e), { tipo: 'erro', ms: 7000 }); }
         };
@@ -1918,6 +2242,179 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     if (!t) return;
     const a = c.areaMap.get(t.areaId) || {};
     await iniciarCom({ areaId: t.areaId, quadroId: t.quadroId, tarefaId: t.id, descricao: '', faturavel: a.faturavelPadrao !== false });
+  }
+
+  // ====================================================================
+  // IMAGENS DAS TAREFAS (referências e progresso do dia)
+  // ====================================================================
+  const NOME_TIPO = { referencia: 'Referência', progresso: 'Progresso' };
+  const usoImagens = () => [...D.estado.imagens.values()].reduce((t, m) => t + N.bytesImagem(m), 0);
+  const nomeComo = (nome, ext, sufixo) => `${String(nome || 'imagem').replace(/\.[^.]+$/, '')}${sufixo}.${ext}`;
+  function miniImagem(m, capaId) {
+    const capa = m.id === capaId;
+    return `<button type="button" class="img-mini${capa ? ' capa' : ''}" data-img="${esc(m.id)}" aria-label="Abrir ${esc(NOME_TIPO[m.tipo] || 'imagem')}${m.nota ? ': ' + esc(m.nota) : ''}"><img src="${esc(m.mini)}" alt="" loading="lazy" draggable="false">${capa ? '<span class="selo-capa">★ Capa</span>' : ''}</button>`;
+  }
+  function desenharImagensTarefa(v, tarefaId, horasDia) {
+    const t = C().tarefaMap.get(tarefaId) || {};
+    const ref = $('#tf-img-referencia', v), prog = $('#tf-img-progresso', v);
+    if (!D.imagensProntas) { ref.innerHTML = prog.innerHTML = '<p class="mudo" style="font-size:13.5px">Carregando imagens…</p>'; return; }
+    const g = N.imagensDaTarefa([...D.estado.imagens.values()], tarefaId);
+    ref.innerHTML = g.referencias.length ? `<div class="img-grade">${g.referencias.map((m) => miniImagem(m, t.capaId)).join('')}</div>`
+      : '<p class="mudo" style="font-size:13.5px">Nenhuma referência ainda.<span class="so-pc"> Também dá para arrastar arquivos para esta janela ou colar com Ctrl+V.</span></p>';
+    prog.innerHTML = g.progresso.length ? g.progresso.map((d) => `<div class="prog-dia"><div class="prog-cab"><strong>${N.dataLonga(d.data)}</strong>${horasDia.get(d.data) ? `<span class="mudo num">${N.fmtDuracao(horasDia.get(d.data))}h nesta tarefa</span>` : ''}</div>
+      <div class="img-grade">${d.itens.map((m) => miniImagem(m, t.capaId)).join('')}</div>${d.itens.filter((m) => m.nota).map((m) => `<p class="prog-nota">${esc(m.nota)}</p>`).join('')}</div>`).join('')
+      : '<p class="mudo" style="font-size:13.5px">No fim do dia, adicione uma imagem de como a tarefa está.</p>';
+  }
+  function escolherImagens(fn) {
+    const i = document.createElement('input');
+    i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.hidden = true;
+    i.addEventListener('change', () => { const arqs = [...(i.files || [])]; i.remove(); if (arqs.length) fn(arqs); });
+    document.body.appendChild(i);
+    i.click();
+  }
+  function modalEnviarImagens(tarefaId, arquivos, tipo) {
+    const c = C();
+    const t = c.tarefaMap.get(tarefaId);
+    if (!t) return;
+    const lista = arquivos.slice(0, 20);
+    const enviados = new Set();
+    let capaFeita = !!t.capaId;
+    abrirModal({
+      titulo: lista.length > 1 ? `Adicionar ${lista.length} imagens` : 'Adicionar imagem',
+      corpo: `<form novalidate style="display:flex;flex-direction:column;gap:12px">
+        <p class="mudo" style="font-size:13.5px">Em “${esc(t.titulo)}”.${arquivos.length > 20 ? ' Vão as 20 primeiras; as outras, numa próxima vez.' : ''}</p>
+        <fieldset class="campo"><legend>Onde</legend><div class="chips">${N.IMG.TIPOS.map((k) => `<label class="chip"><input type="radio" name="up-tipo" value="${k}"${k === tipo ? ' checked' : ''}><span>${k === 'referencia' ? 'Referências' : 'Progresso'}</span></label>`).join('')}</div></fieldset>
+        <div class="campos"><label class="campo" id="up-data-c"><span>Dia do progresso</span><input type="date" id="up-data" value="${c.hoje}"></label>
+          <label class="campo"><span>Nota (opcional)</span><input id="up-nota" maxlength="200" placeholder="ex.: lineart pronto"></label></div>
+        <label class="check"><input type="checkbox" id="up-original" checked> Guardar o original para baixar depois</label>
+        <div class="lista-envio">${lista.map((f, i) => `<div class="linha-envio" id="up-${i}"><span class="nome">${esc(f.name || 'imagem')}</span><small class="mudo num">${N.fmtBytes(f.size)}</small><b class="st"></b></div>`).join('')}</div>
+        <p class="mudo" style="font-size:12.5px" id="up-uso"></p><div class="erro-campo"></div></form>`,
+      rodape: rodapeForm('', 'Enviar'),
+      aoMontar: (v) => {
+        const tipoSel = () => ($('input[name="up-tipo"]:checked', v) || {}).value || 'referencia';
+        const sync = () => { $('#up-data-c', v).hidden = tipoSel() !== 'progresso'; };
+        v.addEventListener('change', sync); sync();
+        $('#up-uso', v).textContent = `Espaço das imagens: ${N.fmtBytes(usoImagens())} de ~1 GB gratuito. Imagens grandes ganham uma cópia de até 1600 px para a tela; as menores ficam como estão.`;
+        ligarEnvio(v, async () => {
+          if (navigator.onLine === false) return 'Sem internet: as imagens só são enviadas com conexão.';
+          if (usoImagens() >= N.IMG.LIMITE_GRATIS) return 'O espaço gratuito das imagens acabou. Apague imagens antigas na aba Imagens.';
+          const tp = tipoSel();
+          const data = tp === 'progresso' ? N.validar.data(val(v, '#up-data'), 'Dia') : c.hoje;
+          const nota = N.validar.texto(val(v, '#up-nota'), 200, 'Nota');
+          const guardar = $('#up-original', v).checked;
+          let falhas = 0;
+          for (let i = 0; i < lista.length; i++) {
+            if (enviados.has(i)) continue;
+            const st = $(`#up-${i} .st`, v);
+            try {
+              st.textContent = 'Preparando…';
+              const p = await Imagens.preparar(lista[i], { guardarOriginal: guardar });
+              const tt = C().tarefaMap.get(tarefaId) || t;
+              const meta = { id: D.novoId('im'), tarefaId, quadroId: tt.quadroId, areaId: tt.areaId, tipo: tp, data, nota, nome: p.nome, mime: p.mime, largura: p.largura, altura: p.altura, telaIgual: p.telaIgual, telaMime: p.telaMime, telaLargura: p.telaLargura, telaAltura: p.telaAltura, originalBytes: lista[i].size, mini: p.mini, criadoEm: agoraIso() };
+              await D.enviarImagem(meta, p.tela, p.original, (a, n) => { st.textContent = `Enviando ${Math.round((a / n) * 100)}%`; });
+              enviados.add(i);
+              st.textContent = p.avisos.length ? `✓ ${p.avisos[0]}` : '✓';
+              // a primeira imagem da tarefa vira a capa (a ★ de qualquer imagem troca)
+              if (!capaFeita) { capaFeita = true; await D.gravarCampos('tarefas', tarefaId, [[['capaId'], meta.id], [['capaMini'], meta.mini]]); }
+            } catch (e) { st.textContent = '✗ ' + D.mensagemErro(e); falhas++; }
+          }
+          if (falhas) return `${falhas} de ${lista.length} não ${falhas > 1 ? 'foram enviadas' : 'foi enviada'} (motivo na lista). Enviar de novo tenta só ${falhas > 1 ? 'essas' : 'essa'}.`;
+          toast(lista.length > 1 ? `${lista.length} imagens adicionadas` : 'Imagem adicionada');
+          if (usoImagens() >= N.IMG.LIMITE_GRATIS * N.IMG.AVISO_USO) toast(`Atenção: as imagens já usam ${N.fmtBytes(usoImagens())} do ~1 GB gratuito.`, { ms: 8000 });
+          return true;
+        });
+      },
+    });
+  }
+  function modalImagem(id, ids, opts = {}) {
+    const m = D.estado.imagens.get(id);
+    if (!m) return;
+    const c = C();
+    const t = c.tarefaMap.get(m.tarefaId);
+    const pos = Math.max(0, ids.indexOf(id));
+    const temOriginal = m.partes > 0 || m.telaIgual;
+    const original = m.partes ? `original ${N.fmtBytes(m.originalBytes)}` : m.telaIgual ? `original ${N.fmtBytes(m.telaBytes)}` : 'original não guardado (só a versão da tela)';
+    let url = null;
+    abrirModal({
+      titulo: m.tipo === 'progresso' ? `Progresso · ${N.dataLonga(m.data)}` : 'Referência', largo: true, fecharNoVeu: true,
+      corpo: `<div class="visor"><img id="vz-img" src="${esc(m.mini)}" alt="${esc(m.nota || m.nome || '')}" class="borrada">
+          ${ids.length > 1 ? `<button type="button" class="visor-seta esq" data-x="ant" aria-label="Imagem anterior"${pos > 0 ? '' : ' disabled'}>${ic('esq')}</button><button type="button" class="visor-seta dir" data-x="prox" aria-label="Próxima imagem"${pos < ids.length - 1 ? '' : ' disabled'}>${ic('dir')}</button>` : ''}</div>
+        <div class="visor-info"><strong>${esc(t ? t.titulo : 'Tarefa removida')}</strong><small>${esc(t ? [nomeArea(c, t.areaId), (c.quadroMap.get(t.quadroId) || {}).nome].filter(Boolean).join(' · ') : '')}${ids.length > 1 ? ` · ${pos + 1} de ${ids.length}` : ''}</small><small>${esc(m.nome || '')} · ${m.largura}×${m.altura} px · ${original}</small></div>
+        <form novalidate class="campos tres" style="margin-top:10px">
+          <label class="campo"><span>Tipo</span><select id="vz-tipo">${N.IMG.TIPOS.map((k) => opt(k, NOME_TIPO[k], k === m.tipo)).join('')}</select></label>
+          <label class="campo" id="vz-data-c"><span>Dia</span><input type="date" id="vz-data" value="${esc(m.data)}"></label>
+          <label class="campo"><span>Nota</span><input id="vz-nota" maxlength="200" value="${esc(m.nota || '')}"></label></form>
+        <div class="erro-campo"></div>`,
+      rodape: `<div class="linha-botoes">${t ? `<button type="button" class="botao" data-x="capa">${t.capaId === m.id ? 'Tirar da capa' : '★ Usar como capa'}</button>` : ''}<button type="button" class="botao" data-x="baixar">${temOriginal ? 'Baixar original' : 'Baixar'}</button>${opts.daAba && t ? '<button type="button" class="botao" data-x="tarefa">Abrir tarefa</button>' : ''}<button type="button" class="botao perigo" data-x="excluir">Excluir</button></div><div class="dir"><button type="button" class="botao" data-fechar>Fechar</button><button type="button" class="botao primario" data-salvar>Salvar</button></div>`,
+      aoFechar: () => { if (url) URL.revokeObjectURL(url); },
+      aoMontar: (v) => {
+        const img = $('#vz-img', v);
+        D.lerTela(m).then((u8) => { url = Imagens.urlDe(u8, m.telaMime || m.mime); if (img.isConnected) { img.src = url; img.classList.remove('borrada'); } })
+          .catch((e) => { const er = $('.erro-campo', v); if (er) er.textContent = 'Não foi possível abrir a imagem: ' + D.mensagemErro(e); });
+        const syncTipo = () => { $('#vz-data-c', v).hidden = val(v, '#vz-tipo') !== 'progresso'; };
+        $('#vz-tipo', v).addEventListener('change', syncTipo); syncTipo();
+        const ir = (d) => { const n = ids[pos + d]; if (n) { fecharModal(v); modalImagem(n, ids, opts); } };
+        v.addEventListener('keydown', (e) => { if (e.target.matches && e.target.matches('input, select, textarea')) return; if (e.key === 'ArrowLeft') ir(-1); if (e.key === 'ArrowRight') ir(1); });
+        v.addEventListener('click', async (ev) => {
+          const b = ev.target.closest('[data-x]');
+          if (!b || b.disabled) return;
+          const x = b.dataset.x;
+          if (x === 'ant') return ir(-1);
+          if (x === 'prox') return ir(1);
+          if (x === 'tarefa') { fecharModal(v); return abrirTarefa(m.tarefaId); }
+          if (x === 'capa') {
+            const tira = (C().tarefaMap.get(m.tarefaId) || {}).capaId === m.id;
+            if (await exec(() => D.gravarCampos('tarefas', m.tarefaId, [[['capaId'], tira ? null : m.id], [['capaMini'], tira ? null : m.mini]]), tira ? 'Capa removida' : 'Esta imagem agora é a capa da tarefa')) b.textContent = tira ? '★ Usar como capa' : 'Tirar da capa';
+            return;
+          }
+          if (x === 'baixar') {
+            const txt = b.textContent;
+            b.disabled = true;
+            try {
+              const u8 = await D.lerOriginal(m, (a, n) => { b.textContent = `Baixando ${Math.round((a / n) * 100)}%`; });
+              if (temOriginal) baixar(m.nome || 'imagem', u8, m.mime); else baixar(nomeComo(m.nome, 'jpg', '-tela'), u8, m.telaMime);
+            } catch (e) { toast('Não foi possível baixar: ' + D.mensagemErro(e), { tipo: 'erro' }); } finally { b.disabled = false; b.textContent = txt; }
+            return;
+          }
+          if (x === 'excluir') {
+            if (!(await confirmar({ titulo: 'Excluir imagem?', texto: 'A imagem e o original guardado serão apagados de vez.', botao: 'Excluir', perigo: true }))) return;
+            const eraCapa = (C().tarefaMap.get(m.tarefaId) || {}).capaId === m.id;
+            if (await exec(() => D.excluirImagem(m), 'Imagem excluída')) {
+              if (eraCapa) await exec(() => D.gravarCampos('tarefas', m.tarefaId, [[['capaId'], null], [['capaMini'], null]]));
+              fecharModal(v);
+            }
+          }
+        });
+        ligarEnvio(v, async () => {
+          const tipo = val(v, '#vz-tipo');
+          const data = tipo === 'progresso' ? N.validar.data(val(v, '#vz-data'), 'Dia') : m.data;
+          await D.gravarCampos('imagens', m.id, [[['tipo'], tipo], [['data'], data], [['nota'], N.validar.texto(val(v, '#vz-nota'), 200, 'Nota')]]);
+          toast('Imagem atualizada');
+          return true;
+        });
+      },
+    });
+  }
+  function vImagens() {
+    const c = C();
+    D.ligarImagens();
+    if (!D.imagensProntas) return '<section class="cartao"><div class="vazio"><strong>Carregando imagens…</strong></div></section>';
+    const f = S.img;
+    const areaId = S.areaSel || f.areaId;
+    const todas = [...D.estado.imagens.values()];
+    const uso = todas.reduce((t, m) => t + N.bytesImagem(m), 0);
+    const pct = Math.min(100, (uso / N.IMG.LIMITE_GRATIS) * 100);
+    const l = todas.filter((m) => (!areaId || m.areaId === areaId) && (!f.quadroId || m.quadroId === f.quadroId) && (!f.tipo || m.tipo === f.tipo)).sort((a, b) => (a.criadoEm < b.criadoEm ? 1 : -1));
+    window.__imgsLista = l.map((m) => m.id);
+    const quadros = areaId ? c.quadrosDe(areaId, true) : [];
+    let h = `<section class="cartao"><div class="cartao-cab"><h2>Espaço das imagens</h2><small><span class="num">${N.fmtBytes(uso)}</span> de ~1 GB gratuito</small></div><div class="barra${pct >= N.IMG.AVISO_USO * 100 ? ' alerta' : ''}"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <p class="mudo" style="font-size:12.5px;margin-top:6px">${todas.length} ${todas.length === 1 ? 'imagem' : 'imagens'}. O espaço gratuito do banco é dividido com o Livro-Caixa e o Rotina Fit, que usam muito pouco.${pct >= N.IMG.AVISO_USO * 100 ? ' <b>Está perto do limite:</b> apague imagens antigas ou envie sem guardar o original.' : ''}</p></section>`;
+    h += `<section class="cartao" style="display:flex;flex-direction:column;gap:10px">${S.areaSel && !quadros.length ? '' : `<div class="campos tres">
+      ${S.areaSel ? '' : `<label class="campo"><span>Área</span><select id="im-area">${opt('', 'Todas', !f.areaId)}${c.areas.filter((a) => a.modulos && a.modulos.quadros).map((a) => opt(a.id, a.nome, a.id === f.areaId)).join('')}</select></label>`}
+      ${quadros.length ? `<label class="campo"><span>Quadro</span><select id="im-quadro">${opt('', 'Todos', !f.quadroId)}${quadros.map((q) => opt(q.id, q.nome, q.id === f.quadroId)).join('')}</select></label>` : ''}</div>`}
+      <div class="chips">${[['', 'Todas'], ['referencia', 'Referências'], ['progresso', 'Progresso']].map(([k, n]) => `<button type="button" class="chip-botao" data-acao="img-tipo" data-t="${k}" aria-pressed="${f.tipo === k}"><span>${n}</span></button>`).join('')}</div></section>`;
+    if (!l.length) return h + `<section class="cartao"><div class="vazio"><strong>${todas.length ? 'Nenhuma imagem com esses filtros' : 'Nenhuma imagem ainda'}</strong><span>As imagens entram pelas tarefas: abra uma tarefa num quadro e use “+ Imagem” (referências) ou “+ Progresso do dia”.</span></div></section>`;
+    return h + `<div class="galeria">${l.map((m) => { const t = c.tarefaMap.get(m.tarefaId); return `<button type="button" class="img-cartao" data-acao="abrir-imagem" data-id="${esc(m.id)}"><img src="${esc(m.mini)}" alt="" loading="lazy" draggable="false"><span class="legenda"><strong>${esc(t ? t.titulo : 'Tarefa removida')}</strong><small>${NOME_TIPO[m.tipo] || ''} · ${N.dataCurta(m.data)}${t && t.capaId === m.id ? ' · ★ capa' : ''}</small></span></button>`; }).join('')}</div>`;
   }
   function editarQuadro(qd, areaId) {
     const c = C();
@@ -2257,7 +2754,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
         <fieldset class="campo" style="margin-top:12px"><legend>Tema</legend><div class="chips">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([k, t]) => `<label class="chip"><input type="radio" name="tema" value="${k}"${tema === k ? ' checked' : ''}><span>${t}</span></label>`).join('')}</div></fieldset>
         <p class="mudo" style="font-size:12.5px;margin-top:8px">Os horários são guardados com o fuso do aparelho no momento do registro (${esc(N.fusoLocal())}). Se você viajar, os dias dos registros antigos não mudam.</p></section>
       <section class="cartao"><div class="cartao-cab"><h2>Backup e dados</h2></div>
-        <div class="linha-botoes"><button type="button" class="botao" data-acao="exportar">Exportar backup (arquivo)</button><label class="botao" style="position:relative">Importar backup<input type="file" id="importar" accept=".json,application/json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label><button type="button" class="botao" data-acao="backup-agora">Backup na nuvem agora</button></div>
+        <div class="linha-botoes"><button type="button" class="botao" data-acao="exportar">Exportar backup (arquivo)</button><label class="check" style="min-height:40px"><input type="checkbox" id="exp-img"${S.expImg ? ' checked' : ''}> Incluir imagens (arquivo bem maior)</label><label class="botao" style="position:relative">Importar backup<input type="file" id="importar" accept=".json,application/json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label><button type="button" class="botao" data-acao="backup-agora">Backup na nuvem agora</button></div>
         <div class="aviso neutro" style="margin-top:12px;font-size:13.5px">O <b>backup automático</b> é diário (quando algo mudou) e fica <b>na nuvem, na sua área privada</b>; ficam os 7 últimos e dá para restaurar aqui. Ele protege contra exclusões e importações erradas, mas não contra a perda da conta. Para isso, use <b>Exportar backup</b> de vez em quando e guarde o arquivo.</div>
         <div class="rotulo-mini" style="margin:12px 0 4px">Backups na nuvem</div>
         ${D.listaBackups().length ? D.listaBackups().map((b) => `<div class="linha-lista"><div class="esq"><div><strong>${quando(b.criadoEm)}</strong><small>${esc(b.motivo)}${b.contagem ? ` · ${b.contagem.entradas || 0} registros · ${b.contagem.tarefas || 0} tarefas` : ''}</small></div></div><div class="dir"><button type="button" class="botao peq" data-acao="restaurar" data-id="${esc(b.id)}">Restaurar</button></div></div>`).join('') : '<p class="mudo" style="font-size:14px">Nenhum ainda.</p>'}</section>
@@ -2315,12 +2812,17 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     const ct = v.contagem;
     confirmar({
       titulo: origem === 'nuvem' ? 'Restaurar este backup?' : 'Importar este backup?', botao: 'Substituir meus dados', perigo: true,
-      texto: `Seus dados atuais serão <b>substituídos</b> por: ${ct.areas} áreas, ${ct.quadros} quadros, ${ct.tarefas} tarefas, ${ct.entradas} registros de horas e ${ct.recebimentos} recebimentos.`,
-      extra: '<div class="aviso" style="margin-top:10px">Antes, um backup dos dados atuais é guardado na nuvem.</div>',
+      texto: `Seus dados atuais serão <b>substituídos</b> por: ${ct.areas} áreas, ${ct.quadros} quadros, ${ct.tarefas} tarefas, ${ct.entradas} registros de horas e ${ct.recebimentos} recebimentos${v.imagens ? ` e ${ct.imagens} imagens` : ''}.`,
+      extra: `<div class="aviso" style="margin-top:10px">Antes, um backup dos dados atuais é guardado na nuvem${v.imagens ? ' (sem as imagens: as atuais são trocadas pelas do arquivo)' : '. As imagens atuais ficam como estão: este backup não tem imagens'}.</div>`,
     }).then(async (ok) => {
       if (!ok) return;
+      if (v.imagens && navigator.onLine === false) { toast('Sem internet: um backup com imagens só é restaurado com conexão.', { tipo: 'erro' }); return; }
       const t = toast('Substituindo…', { ms: 600000 });
-      try { await D.substituirTudo(v.dados, (f, tot) => { t.firstChild.textContent = `Substituindo… ${f} de ${tot}`; }); t.remove(); toast('Dados substituídos'); }
+      try {
+        await D.substituirTudo(v.dados, (f, tot) => { t.firstChild.textContent = `Substituindo… ${f} de ${tot}`; });
+        if (v.imagens) await D.substituirImagens(v.imagens, (f, tot) => { t.firstChild.textContent = `Restaurando as imagens… ${f} de ${tot}`; });
+        t.remove(); toast('Dados substituídos');
+      }
       catch (e) { t.remove(); toast('Parou no meio: ' + D.mensagemErro(e) + ' Restaure pelo backup mais recente.', { tipo: 'erro', ms: 12000 }); }
     });
   }
@@ -2336,7 +2838,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     } catch (e) { toast('Não foi possível sair: ' + D.mensagemErro(e), { tipo: 'erro' }); }
   }
 
-  const VISOES = { cronometro: vCronometro, quadros: vQuadros, semana: vSemana, relatorios: vRelatorios, areas: vAreas };
+  const VISOES = { cronometro: vCronometro, quadros: vQuadros, semana: vSemana, relatorios: vRelatorios, imagens: vImagens, areas: vAreas };
 
   // ====================================================================
   // AÇÕES
@@ -2364,13 +2866,28 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     config: editarConfig,
     'falha-tentar': (d) => { const f = D.falhas[Number(d.i)]; if (f) exec(() => D.tentarDeNovo(f), 'Enviado de novo'); },
     'falha-descartar': (d) => { const f = D.falhas[Number(d.i)]; if (f) D.descartarFalha(f.col, f.id); },
-    exportar: async () => { const t = toast('Preparando o arquivo…', { ms: 60000 }); try { const dados = await D.lerTudo(); t.remove(); baixar(`expediente-backup-${N.hoje()}.json`, JSON.stringify(N.montarBackup(dados, agoraIso()), null, 1)); } catch (e) { t.remove(); toast('Não foi possível exportar: ' + D.mensagemErro(e), { tipo: 'erro' }); } },
+    exportar: async () => {
+      const comImagens = !!S.expImg;
+      const t = toast('Preparando o arquivo…', { ms: 600000 });
+      try {
+        const base = JSON.stringify(N.montarBackup(await D.lerTudo(), agoraIso()), null, 1);
+        if (!comImagens) { t.remove(); baixar(`expediente-backup-${N.hoje()}.json`, base); return; }
+        // uma imagem de cada vez vira um pedaço do arquivo (a página não segura todas juntas na memória)
+        const partes = [base.slice(0, base.lastIndexOf('}')) + ',\n "imagens": ['];
+        await D.paraCadaImagemCompleta((m, i, tot) => { partes.push(new Blob([(i > 1 ? ',\n' : '\n') + JSON.stringify(m)])); t.firstChild.textContent = `Juntando as imagens… ${i} de ${tot}`; });
+        partes.push('\n ]\n}\n');
+        t.remove();
+        baixar(`expediente-backup-com-imagens-${N.hoje()}.json`, new Blob(partes), 'application/json');
+      } catch (e) { t.remove(); toast('Não foi possível exportar: ' + D.mensagemErro(e), { tipo: 'erro' }); }
+    },
+    'img-tipo': (d) => { S.img.tipo = d.t; render(); },
+    'abrir-imagem': (d) => modalImagem(d.id, window.__imgsLista || [d.id], { daAba: true }),
     'backup-agora': async () => { const t = toast('Fazendo backup…', { ms: 60000 }); try { await D.criarBackup('manual'); t.remove(); toast('Backup feito na nuvem'); } catch (e) { t.remove(); toast('Backup não foi feito: ' + D.mensagemErro(e), { tipo: 'erro' }); } },
     restaurar: async (d) => { const b = D.estado.backups.find((x) => x.id === d.id); if (!b) return; try { oferecerSubstituicao(N.validarBackup(await D.lerBackup(b)), 'nuvem'); } catch (e) { toast('Não foi possível ler o backup: ' + D.mensagemErro(e), { tipo: 'erro' }); } },
     'apagar-tudo': () => abrirModal({
-      titulo: 'Apagar todos os seus dados?', corpo: `<p style="color:var(--ink-2)">Áreas, quadros, tarefas, horas e recebimentos serão removidos. Um backup na nuvem é feito antes.</p><label class="campo"><span>Digite APAGAR para confirmar</span><input id="ap-conf" autocomplete="off" autofocus></label><div class="erro-campo"></div>`,
+      titulo: 'Apagar todos os seus dados?', corpo: `<p style="color:var(--ink-2)">Áreas, quadros, tarefas, horas, recebimentos e imagens serão removidos. Um backup na nuvem é feito antes, <b>sem as imagens</b> (para guardá-las, exporte o backup com "Incluir imagens" antes).</p><label class="campo"><span>Digite APAGAR para confirmar</span><input id="ap-conf" autocomplete="off" autofocus></label><div class="erro-campo"></div>`,
       rodape: '<div class="dir"><button type="button" class="botao" data-fechar>Cancelar</button><button type="button" class="botao perigo cheio" data-salvar>Apagar tudo</button></div>',
-      aoMontar: (v) => ligarEnvio(v, async () => { if (val(v, '#ap-conf').toUpperCase() !== 'APAGAR') return 'Digite APAGAR para confirmar.'; await D.substituirTudo(Object.fromEntries(N.COLECOES.map((c) => [c, []]))); toast('Dados apagados. O backup está em Áreas.'); return true; }),
+      aoMontar: (v) => ligarEnvio(v, async () => { if (val(v, '#ap-conf').toUpperCase() !== 'APAGAR') return 'Digite APAGAR para confirmar.'; await D.substituirTudo(Object.fromEntries(N.COLECOES.map((c) => [c, []]))); await D.apagarTodasImagens(); toast('Dados apagados. O backup está em Áreas.'); return true; }),
     }),
   };
   document.addEventListener('click', (e) => {
@@ -2402,11 +2919,13 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     const t = e.target;
     if (t.id === 'seletor-area') { S.areaSel = t.value; pref.gravar('areaSel', S.areaSel); S.rel.areaId = t.value; S.rel.quadroId = ''; render(); return; }
     if (t.dataset && t.dataset.folha) { salvarCelula(t); return; }
+    if (t.id === 'exp-img') { S.expImg = t.checked; return; }
     if (t.closest && t.closest('#form-iniciar')) { const f = $('#form-iniciar'); S.form = { ...S.form, areaId: ($('#in-area', f) || {}).value, quadroId: ($('#in-quadro', f) || {}).value, tarefaId: ($('#in-tarefa', f) || {}).value }; pref.gravar('form', S.form); return; }
     const r = S.rel;
     const mapa = { 'rl-de': () => { r.de = t.value; }, 'rl-ate': () => { r.ate = t.value; }, 'rl-area': () => { r.areaId = t.value; r.quadroId = ''; }, 'rl-quadro': () => { r.quadroId = t.value; }, 'rl-fat': () => { r.fat = t.value; }, 'rl-arq': () => { r.arquivados = t.checked; },
       'rl-am': () => { r.arred.modo = t.value; pref.gravar('arred', r.arred); }, 'rl-ap': () => { r.arred.passo = Number(t.value); pref.gravar('arred', r.arred); }, 'rl-ad': () => { r.arred.direcao = t.value; pref.gravar('arred', r.arred); },
-      'ls-coluna': () => { S.lista.coluna = t.value; }, 'ls-prio': () => { S.lista.prioridade = t.value; }, 'ls-prazo': () => { S.lista.prazo = t.value; } };
+      'ls-coluna': () => { S.lista.coluna = t.value; }, 'ls-prio': () => { S.lista.prioridade = t.value; }, 'ls-prazo': () => { S.lista.prazo = t.value; },
+      'im-area': () => { S.img.areaId = t.value; S.img.quadroId = ''; }, 'im-quadro': () => { S.img.quadroId = t.value; } };
     if (mapa[t.id]) { mapa[t.id](); render(); return; }
     if (t.name === 'tema') { pref.gravar('tema', t.value); aplicarTema(); }
     if (t.id === 'importar') {
