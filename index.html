@@ -2141,7 +2141,9 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     const c = C();
     if (!window.__rel) return;
     const d = diasTrabalhados(c, window.__rel);
-    const texto = d.linhas.map((x) => [`${x.data} ${x.horas}`, ...x.itens.map((i) => `  ${i.nome}: ${i.horas}`)].join('\n')).join('\n') + `\n\n${d.rotuloTotal}: ${d.total}\n`;
+    // dia com um só cliente/quadro/tarefa: tudo numa linha; com vários, o total do dia e o detalhe embaixo
+    const dia = (x) => (x.itens.length === 1 ? `${x.data} ${x.itens[0].nome}: ${x.horas}` : [`${x.data} ${x.horas}`, ...x.itens.map((i) => `  ${i.nome}: ${i.horas}`)].join('\n'));
+    const texto = d.linhas.map(dia).join('\n') + `\n\n${d.rotuloTotal}: ${d.total}\n`;
     try { await navigator.clipboard.writeText(texto); toast('Lista copiada. Cole no bloco de notas ou numa mensagem.'); }
     catch (e) {
       abrirModal({ titulo: 'Copiar dias trabalhados', fecharNoVeu: true, corpo: `<p class="mudo" style="font-size:13.5px">O texto já está selecionado: aperte Ctrl + C (no celular, toque e escolha Copiar).</p><textarea id="dias-texto" readonly style="width:100%;min-height:260px;font-family:var(--f-num);font-size:13px">${esc(texto)}</textarea>`, rodape: '<div class="dir"><button type="button" class="botao" data-fechar>Fechar</button></div>', aoMontar: (v) => { const t = v.querySelector('#dias-texto'); setTimeout(() => { t.focus(); t.select(); }, 30); } });
