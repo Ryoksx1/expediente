@@ -304,8 +304,9 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
 .img-cartao .legenda { display: flex; flex-direction: column; padding: 8px 10px; min-width: 0; }
 .img-cartao .legenda strong { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .img-cartao .legenda small { font-size: 12px; color: var(--muted); }
-.cartao-tarefa .capa-t { width: calc(100% + 24px); margin: -10px -12px 2px; aspect-ratio: 16 / 9; object-fit: cover; display: block; border-radius: 11px 11px 0 0; background: var(--surface-2); }
-.capa-l { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; }
+/* capa: a imagem inteira, centralizada; o fundo do cartão aparece onde ela é transparente */
+.cartao-tarefa .capa-t { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; object-fit: contain; object-position: center; display: block; border-radius: 8px; background: transparent; }
+.capa-l { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; flex: none; }
 .barra.alerta > i { background: var(--warn); }
 .tip { position: fixed; z-index: 80; pointer-events: none; background: var(--ink); color: var(--bg); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; white-space: pre-line; max-width: 240px; }
 
@@ -1191,8 +1192,20 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
           throw e;
         }
       },
+      /** Refaz as cópias de exibição (versão da tela e miniatura) de uma imagem já enviada; o original não muda. */
+      async trocarCopias(meta, { tela, telaMime, telaLargura, telaAltura, mini, alfa }) {
+        this._exigirLogin();
+        const pares = [[['mini'], mini], [['alfa'], !!alfa]];
+        if (tela) {
+          await this._gravarConfirmado(this._col('imagemTela').doc(meta.id), { conteudo: this._bytes(tela) });
+          this._telas.set(meta.id, tela);
+          pares.push([['telaBytes'], tela.length], [['telaMime'], telaMime], [['telaLargura'], telaLargura], [['telaAltura'], telaAltura]);
+        }
+        await this.gravarCampos('imagens', meta.id, pares);
+      },
       async lerTela(meta) {
-        if (this._telas.has(meta.id)) return this._telas.get(meta.id);
+        const guardada = this._telas.get(meta.id);
+        if (guardada && (meta.telaBytes == null || guardada.length === meta.telaBytes)) return guardada; // cópia refeita em outro aparelho tem outro tamanho
         this._exigirLogin();
         const s = await this._col('imagemTela').doc(meta.id).get();
         if (!s.exists) throw Object.assign(new Error('O arquivo desta imagem não foi encontrado.'), { code: 'invalid-argument' });
@@ -1424,29 +1437,47 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     try { await img.decode(); } catch (e) { URL.revokeObjectURL(url); throw e; }
     return { fonte: img, largura: img.naturalWidth, altura: img.naturalHeight, liberar: () => URL.revokeObjectURL(url) };
   }
-  function desenhar(fonte, w, h) {
+  /** Desenha reduzida. Sem transparência vai em JPG (fundo branco por baixo); com transparência, o fundo fica vazio. */
+  function desenhar(fonte, w, h, alfa) {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     const x = c.getContext('2d');
-    x.fillStyle = '#ffffff'; // JPG não tem transparência: fundo branco no lugar
-    x.fillRect(0, 0, w, h);
+    if (!alfa) { x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h); }
     x.imageSmoothingQuality = 'high';
     x.drawImage(fonte, 0, 0, w, h);
     return c;
   }
-  const blobDe = (canvas, q) => new Promise((ok, falha) => canvas.toBlob((b) => (b ? ok(b) : falha(erro('O navegador não conseguiu preparar a imagem.'))), 'image/jpeg', q));
-  /** JPG que caiba no limite: baixa a qualidade e, se ainda não couber, as medidas. */
-  async function jpegAte(fonte, w, h, limite) {
+  /** A imagem tem partes transparentes? (confere numa cópia pequena) */
+  function temTransparencia(fonte, largura, altura) {
+    const { w, h } = N.dimensoes(largura, altura, 200);
+    const d = desenhar(fonte, w, h, true).getContext('2d').getImageData(0, 0, w, h).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i] < 250) return true;
+    return false;
+  }
+  const blobDe = (canvas, tipo, q) => new Promise((ok, falha) => canvas.toBlob((b) => (b ? ok(b) : falha(erro('O navegador não conseguiu preparar a imagem.'))), tipo, q));
+  /** Versão que caiba no limite: JPG, ou WebP/PNG quando há transparência; baixa a qualidade e, se ainda não couber, as medidas. */
+  async function reduzirAte(fonte, w, h, limite, alfa) {
     for (let k = 1; k >= 0.5; k -= 0.15) {
-      const c = desenhar(fonte, Math.round(w * k), Math.round(h * k));
-      for (const q of [0.88, 0.8, 0.7, 0.6]) { const b = await blobDe(c, q); if (b.size <= limite) return { bytes: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height }; }
+      const c = desenhar(fonte, Math.round(w * k), Math.round(h * k), alfa);
+      for (const q of [0.88, 0.8, 0.7, 0.6]) {
+        const b = await blobDe(c, alfa ? 'image/webp' : 'image/jpeg', q); // sem WebP, o navegador devolve PNG
+        if (b.size <= limite) return { bytes: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height, mime: b.type || (alfa ? 'image/png' : 'image/jpeg') };
+        if (alfa && b.type === 'image/png') break; // PNG não tem qualidade: só diminuir resolve
+      }
     }
     throw erro('Não foi possível reduzir esta imagem o bastante.');
   }
-  function miniatura(fonte, largura, altura) {
-    const { w, h } = N.dimensoes(largura, altura, N.IMG.LADO_MINI);
-    const c = desenhar(fonte, w, h);
-    for (const q of [0.78, 0.65, 0.5, 0.35]) { const u = c.toDataURL('image/jpeg', q); if (u.length <= N.IMG.MAX_MINI) return u; }
+  function miniatura(fonte, largura, altura, alfa) {
+    for (const lado of [N.IMG.LADO_MINI, 260, 200, 150]) {
+      const { w, h } = N.dimensoes(largura, altura, lado);
+      const c = desenhar(fonte, w, h, alfa);
+      for (const q of [0.78, 0.65, 0.5, 0.35]) {
+        let u = c.toDataURL(alfa ? 'image/webp' : 'image/jpeg', q);
+        if (alfa && !u.startsWith('data:image/webp')) u = c.toDataURL('image/png');
+        if (u.length <= N.IMG.MAX_MINI) return u;
+        if (u.startsWith('data:image/png')) break;
+      }
+    }
     throw erro('Não foi possível gerar a miniatura.');
   }
 
@@ -1460,13 +1491,12 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
       const mime = arquivo.type || 'image/jpeg';
       const plano = N.planoImagem({ largura: a.largura, altura: a.altura, bytes: arquivo.size, mime, guardarOriginal });
       const bytes = new Uint8Array(await arquivo.arrayBuffer());
-      let tela;
-      if (plano.telaIgual) tela = { bytes, w: a.largura, h: a.altura, mime };
-      else { const j = await jpegAte(a.fonte, plano.tela.w, plano.tela.h, N.IMG.MAX_TELA); tela = { ...j, mime: 'image/jpeg' }; }
+      const alfa = mime !== 'image/jpeg' && temTransparencia(a.fonte, a.largura, a.altura);
+      const tela = plano.telaIgual ? { bytes, w: a.largura, h: a.altura, mime } : await reduzirAte(a.fonte, plano.tela.w, plano.tela.h, N.IMG.MAX_TELA, alfa);
       return {
-        largura: a.largura, altura: a.altura, mime, nome, telaIgual: plano.telaIgual,
+        largura: a.largura, altura: a.altura, mime, nome, telaIgual: plano.telaIgual, alfa,
         tela: tela.bytes, telaMime: tela.mime, telaLargura: tela.w, telaAltura: tela.h,
-        original: plano.partes ? bytes : null, mini: miniatura(a.fonte, a.largura, a.altura), avisos: plano.avisos,
+        original: plano.partes ? bytes : null, mini: miniatura(a.fonte, a.largura, a.altura, alfa), avisos: plano.avisos,
       };
     } finally { a.liberar(); }
   }
@@ -2051,6 +2081,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
   // ====================================================================
   function vQuadros() {
     const c = C();
+    D.ligarImagens(); // as capas já vêm na tarefa; a lista é para o conserto das transparências
     if (!c.areasQuadros.length) return `<section class="cartao"><div class="vazio"><strong>Nenhuma área com quadros</strong><span>Ligue "Quadros de tarefas" numa área (em Áreas) para organizar as tarefas desse cliente.</span><button type="button" class="botao primario peq" data-acao="aba" data-aba="areas">Ir para Áreas</button></div></section>`;
     const area = c.areasQuadros.find((a) => a.id === S.areaSel) || c.areasQuadros[0];
     const quadros = c.quadrosDe(area.id);
@@ -2250,6 +2281,23 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
   const NOME_TIPO = { referencia: 'Referência', progresso: 'Progresso' };
   const usoImagens = () => [...D.estado.imagens.values()].reduce((t, m) => t + N.bytesImagem(m), 0);
   const nomeComo = (nome, ext, sufixo) => `${String(nome || 'imagem').replace(/\.[^.]+$/, '')}${sufixo}.${ext}`;
+  /** Imagens enviadas antes de o app guardar a transparência ganharam fundo branco nas cópias de exibição.
+      Uma vez por sessão, refaz essas cópias a partir do original guardado (o original não muda). */
+  let reparoFeito = false;
+  async function repararTransparencias() {
+    if (reparoFeito || navigator.onLine === false) return;
+    reparoFeito = true;
+    const alvo = [...D.estado.imagens.values()].filter((m) => !('alfa' in m) && m.mime !== 'image/jpeg' && (m.telaIgual || m.partes > 0));
+    for (const m of alvo) {
+      try {
+        const original = await D.lerOriginal(m);
+        const p = await Imagens.preparar(new File([original], m.nome || 'imagem', { type: m.mime }), { guardarOriginal: false });
+        await D.trocarCopias(m, { ...(p.alfa && !m.telaIgual ? { tela: p.tela, telaMime: p.telaMime, telaLargura: p.telaLargura, telaAltura: p.telaAltura } : {}), mini: p.alfa ? p.mini : m.mini, alfa: p.alfa });
+        const t = C().tarefaMap.get(m.tarefaId);
+        if (p.alfa && t && t.capaId === m.id) await D.gravarCampos('tarefas', t.id, [[['capaMini'], p.mini]]);
+      } catch (e) { console.warn('não foi possível refazer as cópias da imagem', m.id, e); }
+    }
+  }
   function miniImagem(m, capaId) {
     const capa = m.id === capaId;
     return `<button type="button" class="img-mini${capa ? ' capa' : ''}" data-img="${esc(m.id)}" aria-label="Abrir ${esc(NOME_TIPO[m.tipo] || 'imagem')}${m.nota ? ': ' + esc(m.nota) : ''}"><img src="${esc(m.mini)}" alt="" loading="lazy" draggable="false">${capa ? '<span class="selo-capa">★ Capa</span>' : ''}</button>`;
@@ -2310,7 +2358,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
               st.textContent = 'Preparando…';
               const p = await Imagens.preparar(lista[i], { guardarOriginal: guardar });
               const tt = C().tarefaMap.get(tarefaId) || t;
-              const meta = { id: D.novoId('im'), tarefaId, quadroId: tt.quadroId, areaId: tt.areaId, tipo: tp, data, nota, nome: p.nome, mime: p.mime, largura: p.largura, altura: p.altura, telaIgual: p.telaIgual, telaMime: p.telaMime, telaLargura: p.telaLargura, telaAltura: p.telaAltura, originalBytes: lista[i].size, mini: p.mini, criadoEm: agoraIso() };
+              const meta = { id: D.novoId('im'), tarefaId, quadroId: tt.quadroId, areaId: tt.areaId, tipo: tp, data, nota, nome: p.nome, mime: p.mime, largura: p.largura, altura: p.altura, telaIgual: p.telaIgual, alfa: p.alfa, telaMime: p.telaMime, telaLargura: p.telaLargura, telaAltura: p.telaAltura, originalBytes: lista[i].size, mini: p.mini, criadoEm: agoraIso() };
               await D.enviarImagem(meta, p.tela, p.original, (a, n) => { st.textContent = `Enviando ${Math.round((a / n) * 100)}%`; });
               enviados.add(i);
               st.textContent = p.avisos.length ? `✓ ${p.avisos[0]}` : '✓';
@@ -2372,7 +2420,7 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
             b.disabled = true;
             try {
               const u8 = await D.lerOriginal(m, (a, n) => { b.textContent = `Baixando ${Math.round((a / n) * 100)}%`; });
-              if (temOriginal) baixar(m.nome || 'imagem', u8, m.mime); else baixar(nomeComo(m.nome, 'jpg', '-tela'), u8, m.telaMime);
+              if (temOriginal) baixar(m.nome || 'imagem', u8, m.mime); else baixar(nomeComo(m.nome, String(m.telaMime || 'image/jpeg').split('/')[1].replace('jpeg', 'jpg'), '-tela'), u8, m.telaMime);
             } catch (e) { toast('Não foi possível baixar: ' + D.mensagemErro(e), { tipo: 'erro' }); } finally { b.disabled = false; b.textContent = txt; }
             return;
           }
@@ -2959,10 +3007,11 @@ table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6
     if (S.status === 'primeira' && D.estado.areas.length) S.status = 'ok';
     if (S.status === 'ok' && D.pronto && !D.estado.areas.length) S.status = 'primeira';
     render();
+    if (D.imagensProntas && S.status === 'ok') repararTransparencias();
     if (D.pronto && S.status === 'ok' && !backupFeito) { backupFeito = true; setTimeout(() => D.backupDiario().catch((e) => console.warn('backup diário', e)), 5000); }
   });
   D.ouvirConta((u) => {
-    backupFeito = false; _c = null; clearTimeout(tCarga);
+    backupFeito = false; reparoFeito = false; _c = null; clearTimeout(tCarga);
     pilha.slice().forEach((v) => fecharModal(v));
     if (!u) { S.status = 'login'; render(); return; }
     S.status = 'carregando'; render();
