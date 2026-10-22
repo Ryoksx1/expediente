@@ -260,6 +260,15 @@ table.dados td.n { font-family: var(--f-num); font-variant-numeric: tabular-nums
 table.dados tr.nivel-1 td:first-child { padding-left: 22px; }
 table.dados tr.nivel-2 td:first-child { padding-left: 40px; color: var(--ink-2); }
 table.dados tr.nivel-0 td { font-weight: 700; }
+/* dias trabalhados: um bloco por dia (data e horas) com o detalhe por cliente/quadro/tarefa embaixo */
+table.dados.dias tbody td { border-bottom: 0; padding-block: 3px; }
+table.dados.dias tbody { border-bottom: 1px solid var(--line); }
+table.dados.dias tbody tr:first-child td { padding-top: 9px; font-weight: 700; }
+table.dados.dias tbody tr:last-child td { padding-bottom: 9px; }
+table.dados.dias tr.sub td { color: var(--ink-2); font-size: 13.5px; }
+table.dados.dias tr.sub td:first-child { padding-left: 22px; }
+table.dados.dias tfoot td { padding-top: 10px; font-weight: 800; font-size: 15px; border-bottom: 0; }
+table.dados.dias .semana { color: var(--muted); font-weight: 500; margin-left: 6px; }
 .tip { position: fixed; z-index: 80; pointer-events: none; background: var(--ink); color: var(--bg); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; white-space: pre-line; max-width: 240px; }
 
 /* ---------- listas, áreas ---------- */
@@ -567,7 +576,7 @@ table.dados tr.nivel-0 td { font-weight: 700; }
     const arred = opts.arred || { modo: 'nenhum' };
     const tot = { segundos: 0, faturaveis: 0, naoFaturaveis: 0 };
     const moedas = {};
-    const porArea = new Map(), porQuadro = new Map(), porTarefa = new Map(), porDia = new Map();
+    const porArea = new Map(), porQuadro = new Map(), porTarefa = new Map(), porDia = new Map(), detalheDia = new Map();
     const linhas = [];
     const soma = (mapa, k, base, seg, fat, valor, moeda) => {
       if (!mapa.has(k)) mapa.set(k, { ...base, segundos: 0, faturaveis: 0, valores: {} });
@@ -591,7 +600,14 @@ table.dados tr.nivel-0 td { font-weight: 700; }
       soma(porArea, e.areaId, { areaId: e.areaId }, seg, fat, valor, moeda);
       soma(porQuadro, `${e.areaId}|${e.quadroId || ''}`, { areaId: e.areaId, quadroId: e.quadroId || null }, seg, fat, valor, moeda);
       if (e.tarefaId) soma(porTarefa, e.tarefaId, { areaId: e.areaId, quadroId: e.quadroId, tarefaId: e.tarefaId }, seg, fat, valor, moeda);
-      for (const p of parte) porDia.set(p.data, (porDia.get(p.data) || 0) + p.segundos);
+      for (const p of parte) {
+        porDia.set(p.data, (porDia.get(p.data) || 0) + p.segundos);
+        // dia -> cliente/quadro/tarefa (a parte de cada registro que caiu naquele dia)
+        const itens = detalheDia.get(p.data) || detalheDia.set(p.data, new Map()).get(p.data);
+        const k = N.chaveLinha(e);
+        if (!itens.has(k)) itens.set(k, { areaId: e.areaId, quadroId: e.quadroId || null, tarefaId: e.tarefaId || null, segundos: 0 });
+        itens.get(k).segundos += p.segundos;
+      }
       linhas.push({ entrada: e, segundos: seg, segundosArred: segArred, valor, valorArred, moeda });
     }
     // arredondamento pelo total: por área (cliente), proporcional ao valor real
@@ -608,7 +624,8 @@ table.dados tr.nivel-0 td { font-weight: 700; }
     }
     if (arred.modo === 'nenhum') for (const m of Object.values(moedas)) { m.segundosArred = m.segundosFaturaveis; m.valorArred = m.valor; }
     const ord = (mapa) => [...mapa.values()].sort((a, b) => b.segundos - a.segundos);
-    return { total: tot, moedas, porArea: ord(porArea), porQuadro: ord(porQuadro), porTarefa: ord(porTarefa), porDia, linhas: linhas.sort((a, b) => ((a.entrada.inicio || a.entrada.data) < (b.entrada.inicio || b.entrada.data) ? -1 : 1)) };
+    const dias = [...detalheDia.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([data, itens]) => ({ data, segundos: porDia.get(data), itens: ord(itens) }));
+    return { total: tot, moedas, porArea: ord(porArea), porQuadro: ord(porQuadro), porTarefa: ord(porTarefa), porDia, dias, linhas: linhas.sort((a, b) => ((a.entrada.inicio || a.entrada.data) < (b.entrada.inicio || b.entrada.data) ? -1 : 1)) };
   };
   /** Simulação com as tarifas atuais (não altera nada): por moeda, original x simulado. */
   N.simularTarifas = (linhas, tarifaAtual) => {
@@ -2090,6 +2107,10 @@ table.dados tr.nivel-0 td { font-weight: 700; }
       ${moedas.length ? `<div class="tabela-wrap"><table class="dados"><thead><tr><th>Moeda</th><th>Horas faturáveis</th><th>Estimado</th>${r.arred.modo !== 'nenhum' ? '<th>Arredondado</th>' : ''}<th>Recebido</th><th>A receber</th></tr></thead><tbody>${moedas.map((m) => { const x = rel.moedas[m] || { segundosFaturaveis: 0, valor: 0, valorArred: 0, segundosArred: 0 }; const base = r.arred.modo !== 'nenhum' ? x.valorArred : x.valor; const rec = recebidos[m] || 0; return `<tr><td>${m}</td><td class="n">${N.fmtDuracao(x.segundosFaturaveis)}${r.arred.modo !== 'nenhum' ? ` <span class="mudo">(→ ${N.fmtDuracao(x.segundosArred)})</span>` : ''}</td><td class="n">${N.fmtMoeda(x.valor, m)}</td>${r.arred.modo !== 'nenhum' ? `<td class="n">${N.fmtMoeda(x.valorArred, m)}</td>` : ''}<td class="n">${N.fmtMoeda(rec, m)}</td><td class="n">${base - rec >= 0 ? N.fmtMoeda(base - rec, m) : `<span class="mudo">recebido a mais ${N.fmtMoeda(rec - base, m)}</span>`}</td></tr>`; }).join('')}</tbody></table></div>
         <p class="mudo" style="font-size:12.5px;margin-top:6px">Cada registro usa a tarifa e a moeda da época. Moedas diferentes nunca são somadas. ${r.arred.modo !== 'nenhum' ? 'O arredondamento muda só o valor a cobrar; as horas reais continuam as mesmas.' : ''}</p>` : '<p class="mudo">Nenhuma hora faturável neste período.</p>'}</section>`;
     h += `<section class="cartao"><div class="cartao-cab"><h2>Horas por ${r.agrupar === 'dia' ? 'dia' : r.agrupar === 'semana' ? 'semana' : 'mês'}</h2><div class="chips">${[['dia', 'Dia'], ['semana', 'Semana'], ['mes', 'Mês']].map(([k, t]) => `<button type="button" class="chip-botao" data-acao="rel-agrupar" data-g="${k}" aria-pressed="${r.agrupar === k}"><span>${t}</span></button>`).join('')}</div></div><div class="grafico" data-grafico="barras" data-de="${de}" data-ate="${ate}"></div></section>`;
+    // dias trabalhados: data, horas do dia e de quem foram; total do período embaixo
+    const dias = diasTrabalhados(c, rel);
+    h += `<section class="cartao"><div class="cartao-cab"><h2>Dias trabalhados</h2><button type="button" class="botao peq" data-acao="copiar-dias"${dias.linhas.length ? '' : ' disabled'}>Copiar como texto</button></div>
+      ${dias.linhas.length ? `<div class="tabela-wrap"><table class="dados dias"><thead><tr><th>Data</th><th>Horas</th></tr></thead>${dias.linhas.map((d) => `<tbody><tr><td>${d.data}<span class="semana">${d.semana}</span></td><td class="n">${d.horas}</td></tr>${d.itens.map((x) => `<tr class="sub"><td>${esc(x.nome)}</td><td class="n">${x.horas}</td></tr>`).join('')}</tbody>`).join('')}<tfoot><tr><td>${dias.rotuloTotal}</td><td class="n">${dias.total}</td></tr></tfoot></table></div>` : '<div class="vazio"><strong>Nenhum dia com horas neste período</strong></div>'}</section>`;
     // detalhamento área -> quadro -> tarefa
     let tb = '';
     for (const a of rel.porArea) {
@@ -2104,6 +2125,27 @@ table.dados tr.nivel-0 td { font-weight: 700; }
     const recs = c.e.recebimentos.filter((x) => x.data >= de && x.data <= ate && (!r.areaId || x.areaId === r.areaId)).sort((a, b) => (a.data < b.data ? 1 : -1));
     if (recs.length) h += `<section class="cartao"><div class="cartao-cab"><h2>Recebimentos no período</h2></div>${recs.map((x) => `<div class="linha-lista clicavel" data-acao="recebimento" data-id="${esc(x.id)}" role="button" tabindex="0" style="padding-inline:6px"><div class="esq"><div><strong>${N.fmtMoeda(x.valorMinor, x.moeda)}</strong><small>${N.dataLonga(x.data)} · ${esc(nomeArea(c, x.areaId))}${x.nota ? ' · ' + esc(x.nota) : ''}</small></div></div></div>`).join('')}</section>`;
     return h;
+  }
+  /** Lista de dias do relatório, já formatada (tela e texto copiado usam a mesma). */
+  function diasTrabalhados(c, rel) {
+    const hh = (s) => `${N.fmtDuracao(s)}h`;
+    const nome = (x) => { const q = x.quadroId && c.quadroMap.get(x.quadroId), t = x.tarefaId && c.tarefaMap.get(x.tarefaId); return [nomeArea(c, x.areaId), q && q.nome, t && t.titulo].filter(Boolean).join(' / '); };
+    const p = S.rel.periodo;
+    return {
+      linhas: rel.dias.map((d) => ({ data: N.dataLonga(d.data), semana: N.DIAS[N.diaSemana(d.data)], horas: hh(d.segundos), itens: d.itens.map((x) => ({ nome: nome(x), horas: hh(x.segundos) })) })),
+      rotuloTotal: p === 'mes' || p === 'mes-passado' ? 'Total do mês' : p === 'semana' || p === 'semana-passada' ? 'Total da semana' : 'Total do período',
+      total: hh(rel.total.segundos),
+    };
+  }
+  async function copiarDias() {
+    const c = C();
+    if (!window.__rel) return;
+    const d = diasTrabalhados(c, window.__rel);
+    const texto = d.linhas.map((x) => [`${x.data} ${x.horas}`, ...x.itens.map((i) => `  ${i.nome}: ${i.horas}`)].join('\n')).join('\n') + `\n\n${d.rotuloTotal}: ${d.total}\n`;
+    try { await navigator.clipboard.writeText(texto); toast('Lista copiada. Cole no bloco de notas ou numa mensagem.'); }
+    catch (e) {
+      abrirModal({ titulo: 'Copiar dias trabalhados', fecharNoVeu: true, corpo: `<p class="mudo" style="font-size:13.5px">O texto já está selecionado: aperte Ctrl + C (no celular, toque e escolha Copiar).</p><textarea id="dias-texto" readonly style="width:100%;min-height:260px;font-family:var(--f-num);font-size:13px">${esc(texto)}</textarea>`, rodape: '<div class="dir"><button type="button" class="botao" data-fechar>Fechar</button></div>', aoMontar: (v) => { const t = v.querySelector('#dias-texto'); setTimeout(() => { t.focus(); t.select(); }, 30); } });
+    }
   }
   function modalSimulacao() {
     const c = C();
@@ -2315,7 +2357,7 @@ table.dados tr.nivel-0 td { font-weight: 700; }
     'abrir-tarefa': (d) => abrirTarefa(d.id), 'cronometrar-tarefa': (d) => cronometrarTarefa(d.id),
     semana: (d) => { S.semana = Number(d.n) === 0 ? N.hoje() : N.addDias(S.semana, Number(d.n)); render(); }, 'linha-folha': modalLinhaFolha,
     'rel-periodo': (d) => { S.rel.periodo = d.p; render(); }, 'rel-agrupar': (d) => { S.rel.agrupar = d.g; render(); },
-    simular: modalSimulacao, recebimento: (d) => modalRecebimento(d.id), csv: exportarCsv,
+    simular: modalSimulacao, recebimento: (d) => modalRecebimento(d.id), csv: exportarCsv, 'copiar-dias': copiarDias,
     'nova-area': () => editarArea(null), 'editar-area': (d) => editarArea(C().areaMap.get(d.id)), 'ver-arquivadas': () => { S.verArquivadas = !S.verArquivadas; render(); },
     config: editarConfig,
     'falha-tentar': (d) => { const f = D.falhas[Number(d.i)]; if (f) exec(() => D.tentarDeNovo(f), 'Enviado de novo'); },
